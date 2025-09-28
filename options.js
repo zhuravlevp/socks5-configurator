@@ -31,8 +31,31 @@ chrome.storage.local.get('bypassswitch', s =>{
     }
 });
 chrome.storage.local.get('bypassdomain', s =>{
-    s = s.bypassdomain || "cn\napple.com";
+    s = s.bypassdomain || "ru\nipinfo.io";
     document.querySelector('#bypassdomain').value = s;
+});
+
+// Загрузка настроек авторизации
+chrome.storage.local.get('authswitch', s => {
+    s = s.authswitch || 'on';
+    if(s == "on"){
+        document.querySelector('#authswitch').checked = true;
+    }
+    if(s == "off"){
+        document.querySelector('#authswitch').checked = false;
+    }
+});
+chrome.storage.local.get('authserver', s => {
+    s = s.authserver || 'http://localhost:5000';
+    document.querySelector('#authserver').value = s;
+});
+chrome.storage.local.get('authusername', s => {
+    s = s.authusername || 'admin';
+    document.querySelector('#authusername').value = s;
+});
+chrome.storage.local.get('authpassword', s => {
+    s = s.authpassword || 'admin123';
+    document.querySelector('#authpassword').value = s;
 });
 
 document.querySelector('#save').addEventListener("click", async (e) => {
@@ -43,6 +66,10 @@ document.querySelector('#save').addEventListener("click", async (e) => {
     var socks5server = document.querySelector('#socks5server').value;
     var bypassswitch = document.querySelector('#bypassswitch').checked;
     var bypassdomain = document.querySelector('#bypassdomain').value;
+    var authswitch = document.querySelector('#authswitch').checked;
+    var authserver = document.querySelector('#authserver').value;
+    var authusername = document.querySelector('#authusername').value;
+    var authpassword = document.querySelector('#authpassword').value;
 
     if(socks5switch){
         if(!/.+:\d+/.test(socks5server)){
@@ -54,6 +81,10 @@ document.querySelector('#save').addEventListener("click", async (e) => {
     }
     chrome.storage.local.set({"socks5switch": socks5switch ? 'on' : 'off'});
     chrome.storage.local.set({"socks5server": socks5server});
+    chrome.storage.local.set({"authswitch": authswitch ? 'on' : 'off'});
+    chrome.storage.local.set({"authserver": authserver});
+    chrome.storage.local.set({"authusername": authusername});
+    chrome.storage.local.set({"authpassword": authpassword});
     var l = [
 		"10.0.0.0/8",
 		"127.0.0.0/8",
