@@ -7,7 +7,16 @@ let wsClient = null;
 chrome.action.onClicked.addListener(() => {
     chrome.runtime.openOptionsPage();
 });
-
+// Функция для получения текущего IP адреса
+async function getCurrentIP() {
+    try {
+        const response = await fetch('https://ipinfo.io/ip');
+        return await response.text();
+    } catch (error) {
+        console.error('Ошибка получения IP:', error);
+        return null;
+    }
+}
 /**
  * Функция авторизации и добавления IP через WebSocket
  */
@@ -42,7 +51,7 @@ async function authenticateAndAddIP() {
     const addCurrentIP = async () => {
         try {
             // Получаем текущий IP через WebSocket API
-            const currentIP = await wsClient.getCurrentIp();
+            const currentIP = await getCurrentIP();
             console.log('[Auth] Текущий IP:', currentIP);
             
             if (!currentIP || currentIP === 'Не удалось определить IP') {
