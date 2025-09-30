@@ -1,86 +1,92 @@
+// Импорт WebSocket клиента
+importScripts('websocket-client.js');
+
+// Глобальный экземпляр WebSocket клиента
+let wsClient = null;
+
 chrome.action.onClicked.addListener(() => {
     chrome.runtime.openOptionsPage();
 });
 
-// Функция для получения текущего IP адреса
-async function getCurrentIP() {
-    try {
-        const response = await fetch('https://ipinfo.io/ip');
-        return await response.text();
-    } catch (error) {
-        console.error('Ошибка получения IP:', error);
-        return null;
-    }
-}
-
-// Функция авторизации и добавления IP
+/**
+ * Функция авторизации и добавления IP через WebSocket
+ */
 async function authenticateAndAddIP() {
-    try {
-        // Получаем настройки из storage
-        const settings = await chrome.storage.local.get([
-            'authswitch', 'authserver', 'authusername', 'authpassword'
-        ]);
-        
-        if (settings.authswitch !== 'on') {
-            console.log('Авторизация отключена');
-            return;
+    // Получаем настройки из storage
+    const settings = await chrome.storage.local.get([
+        'authswitch', 'authserver', 'authusername', 'authpassword'
+    ]);
+    
+    if (settings.authswitch !== 'on') {
+        console.log('[Auth] Авторизация отключена');
+        // Если была активна, отключаем
+        if (wsClient) {
+            wsClient.disconnect();
+            wsClient = null;
         }
-        
-        const authServer = settings.authserver || 'http://localhost:5000';
-        const username = settings.authusername || 'admin';
-        const password = settings.authpassword || 'admin123';
-        
-        // Получаем текущий IP
-        const currentIP = await getCurrentIP();
-        if (!currentIP) {
-            console.error('Не удалось получить IP адрес');
-            return;
+        return;
+    }
+    
+    const authServer = settings.authserver || 'ws://localhost:5000';
+    const username = settings.authusername || 'admin';
+    const password = settings.authpassword || 'admin123';
+    
+    console.log('[Auth] Начало авторизации через WebSocket...');
+    
+    // Создаем новый клиент если его нет
+    if (!wsClient) {
+        wsClient = new ProxyWebSocketClient();
+    }
+    
+    // Функция для добавления IP (вызывается после успешной авторизации)
+    const addCurrentIP = async () => {
+        try {
+            // Получаем текущий IP через WebSocket API
+            const currentIP = await wsClient.getCurrentIp();
+            console.log('[Auth] Текущий IP:', currentIP);
+            
+            if (!currentIP || currentIP === 'Не удалось определить IP') {
+                console.error('[Auth] Не удалось получить IP адрес');
+                return;
+            }
+            
+            // Добавляем IP в разрешенные
+            const result = await wsClient.addIp(currentIP.trim());
+            console.log('[Auth] ✓', result.message || 'IP обработан');
+            
+            // Опционально: получаем список всех разрешенных IP
+            const allowedIps = await wsClient.getAllowedIps();
+            console.log('[Auth] Список разрешенных IP:', allowedIps);
+            
+        } catch (error) {
+            console.log('[Auth] Ошибка добавления IP:', error.message || error);
         }
-        
-        console.log('Текущий IP:', currentIP);
-        
-        // Выполняем авторизацию
-        const loginResponse = await fetch(`${authServer}/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+    };
+    
+    // Устанавливаем callback для автоматического добавления IP после авторизации
+    wsClient.onAuthenticated(() => {
+        console.log('[Auth] Callback: авторизация выполнена, добавляем IP...');
+        addCurrentIP();
+    });
+    
+    // Подключаемся к серверу (не блокируем выполнение при ошибке)
+    if (!wsClient.isConnected) {
+        // Запускаем подключение в фоне, оно будет переподключаться автоматически
+        wsClient.connect(authServer, { username, password }).then(() => {
+            console.log('[Auth] ✓ Подключено к серверу');
+            // Авторизация и добавление IP произойдет автоматически через callback
+        }).catch((error) => {
+            console.log('[Auth] Не удалось подключиться, ожидание автоматического переподключения...');
+            // Переподключение запустится автоматически внутри connect()
         });
-        
-        if (!loginResponse.ok) {
-            console.error('Ошибка авторизации:', loginResponse.status);
-            return;
-        }
-        
-        // Получаем cookies для сессии
-        const cookies = await chrome.cookies.getAll({url: authServer});
-        const sessionCookie = cookies.find(cookie => cookie.name === 'session');
-        
-        if (!sessionCookie) {
-            console.error('Сессия не найдена');
-            return;
-        }
-        
-        // Добавляем IP в разрешенные
-        const addIPResponse = await fetch(`${authServer}/allow_ip`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Cookie': `session=${sessionCookie.value}`
-            },
-            body: JSON.stringify({ip: currentIP.trim()})
+    } else if (!wsClient.isAuthenticated) {
+        // Уже подключены, но не авторизованы - выполняем авторизацию
+        wsClient.authenticate(username, password).catch(e => {
+            console.log('[Auth] Ошибка авторизации:', e.message);
         });
-        
-        if (addIPResponse.ok) {
-            const result = await addIPResponse.json();
-            console.log('IP добавлен:', result.message);
-        } else {
-            console.error('Ошибка добавления IP:', addIPResponse.status);
-        }
-        
-    } catch (error) {
-        console.error('Ошибка авторизации и добавления IP:', error);
+    } else {
+        // Уже подключены и авторизованы - просто добавляем IP
+        addCurrentIP();
     }
 }
 

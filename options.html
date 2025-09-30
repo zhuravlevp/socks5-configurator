@@ -23,15 +23,20 @@
         <div class="center">
             <wl-card class="column">
                 <div class="row">
-                    <wl-title level="3">Proxy Authentication</wl-title>
+                    <wl-title level="3">Proxy Authentication (WebSocket)</wl-title>
                     <wl-switch checked id="authswitch"></wl-switch>
                 </div>
                 <div class="container20"></div>
-                <wl-textfield id="authserver" label="Auth Server URL (e.g., http://localhost:5000)"></wl-textfield>
+                <wl-textfield id="authserver" label="WebSocket Server URL (e.g., ws://localhost:5000 or http://localhost:5000)"></wl-textfield>
                 <div class="container20"></div>
                 <wl-textfield id="authusername" label="Username"></wl-textfield>
                 <div class="container20"></div>
                 <wl-textfield id="authpassword" label="Password" type="password"></wl-textfield>
+                <div class="container20"></div>
+                <div class="row">
+                    <wl-button id="testConnection">Test Connection</wl-button>
+                    <wl-text id="testStatus"></wl-text>
+                </div>
             </wl-card>
         </div>
         <div class="container20"></div>
@@ -71,6 +76,7 @@
                 <wl-button flat inverted>A project by&nbsp;<a href="https://www.txthinking.com">txthinking</a></wl-button>
             </div>
         </div>
+        <script src="websocket-client.js"></script>
         <script src="options.js"></script>
     </body>
 </html>

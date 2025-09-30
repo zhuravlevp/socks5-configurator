@@ -46,7 +46,7 @@ chrome.storage.local.get('authswitch', s => {
     }
 });
 chrome.storage.local.get('authserver', s => {
-    s = s.authserver || 'http://localhost:5000';
+    s = s.authserver || 'ws://localhost:5000';
     document.querySelector('#authserver').value = s;
 });
 chrome.storage.local.get('authusername', s => {
@@ -56,6 +56,53 @@ chrome.storage.local.get('authusername', s => {
 chrome.storage.local.get('authpassword', s => {
     s = s.authpassword || 'admin123';
     document.querySelector('#authpassword').value = s;
+});
+
+// Функция тестирования WebSocket соединения
+document.querySelector('#testConnection').addEventListener('click', async () => {
+    const authserver = document.querySelector('#authserver').value || 'ws://localhost:5000';
+    const authusername = document.querySelector('#authusername').value || 'admin';
+    const authpassword = document.querySelector('#authpassword').value || 'admin123';
+    const statusElement = document.querySelector('#testStatus');
+    
+    statusElement.textContent = 'Тестирование...';
+    statusElement.style.color = 'blue';
+    
+    let wsClient = null;
+    
+    try {
+        // Создаем WebSocket клиент
+        wsClient = new ProxyWebSocketClient();
+        
+        // Отключаем автопереподключение для теста
+        wsClient.disableAutoReconnect();
+        
+        // Подключаемся
+        statusElement.textContent = 'Подключение...';
+        await wsClient.connect(authserver);
+        
+        // Авторизуемся
+        statusElement.textContent = 'Авторизация...';
+        await wsClient.authenticate(authusername, authpassword);
+        
+        // Тестируем получение IP
+        statusElement.textContent = 'Получение IP...';
+        const currentIp = await wsClient.getCurrentIp();
+        
+        // Успех!
+        statusElement.textContent = `✓ Успешно! Текущий IP: ${currentIp}`;
+        statusElement.style.color = 'green';
+        
+    } catch (error) {
+        console.error('Ошибка тестирования:', error);
+        statusElement.textContent = `✗ Ошибка: ${error.message}`;
+        statusElement.style.color = 'red';
+    } finally {
+        // Отключаемся в любом случае
+        if (wsClient) {
+            wsClient.disconnect();
+        }
+    }
 });
 
 document.querySelector('#save').addEventListener("click", async (e) => {
