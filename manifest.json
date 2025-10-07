@@ -8,9 +8,7 @@
     },
     "permissions": [
         "storage",
-        "proxy",
-        "cookies",
-        "activeTab"
+        "proxy"
     ],
     "host_permissions": [
         "http://*/*",
@@ -34,4 +32,5 @@
     },
     "manifest_version": 3
 }
+
 
