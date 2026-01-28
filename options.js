@@ -31,7 +31,7 @@ chrome.storage.local.get('bypassswitch', s =>{
     }
 });
 chrome.storage.local.get('bypassdomain', s =>{
-    s = s.bypassdomain || "ru\nipinfo.io";
+    s = s.bypassdomain || "ru\nnet\nipinfo.io\nwww.google.com\n0.0.0.0/0";
     document.querySelector('#bypassdomain').value = s;
 });
 
@@ -46,7 +46,7 @@ chrome.storage.local.get('authswitch', s => {
     }
 });
 chrome.storage.local.get('authserver', s => {
-    s = s.authserver || 'http://localhost:5000';
+    s = s.authserver || 'ws://localhost:5000';
     document.querySelector('#authserver').value = s;
 });
 chrome.storage.local.get('authusername', s => {
