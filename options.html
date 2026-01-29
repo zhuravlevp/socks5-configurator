@@ -32,6 +32,19 @@
                 <wl-textfield id="authusername" label="Username"></wl-textfield>
                 <div class="container20"></div>
                 <wl-textfield id="authpassword" label="Password" type="password"></wl-textfield>
+                        <div class="status-container">
+          <h3>Статус соединения</h3>
+          <p><strong>Состояние:</strong> <span id="connection-status">загрузка...</span></p>
+          <p><strong>Последний pong:</strong> <span id="last-pong-time">загрузка...</span></p>
+          <p><strong>Текущий IP:</strong> <span id="current-ip">загрузка...</span></p>
+          <p><strong>Попыток переподключения:</strong> <span id="reconnect-attempts">0</span></p>
+          <wl-button id="refreshBtn">Обновить</wl-button>
+        </div>
+        <style>
+        .status-connected { color: green; font-weight: bold; }
+        .status-disconnected { color: red; font-weight: bold; }
+        .status-connecting { color: orange; font-weight: bold; }
+        </style>
             </wl-card>
         </div>
         <div class="container20"></div>
@@ -71,6 +84,10 @@
                 <wl-button flat inverted>A project by&nbsp;<a href="https://www.txthinking.com">txthinking</a></wl-button>
             </div>
         </div>
+
         <script src="options.js"></script>
+        <script src="popup.js"></script>
     </body>
 </html>
+
+

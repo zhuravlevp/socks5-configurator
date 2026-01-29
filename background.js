@@ -15,12 +15,13 @@ async function getCurrentIP() {
 }
 
 // === heartbeat параметры ===
-const PING_INTERVAL = 1000;   // раз в PING_INTERVAL миллисекунд шлём ping
-const PONG_TIMEOUT  = 3000;  // ждём не более PONG_TIMEOUT миллисекунд ответа
+const PING_INTERVAL = 1000;   // раз в 1 секунд шлём ping
+const PONG_TIMEOUT  = 3000;  // ждём не более 3 секунд ответа
 
 // reconnect параметры
 const RECONNECT_INTERVAL = 3000; // пробовать переподключение каждые 3s
-const FORCED_RECONNECT_DELAY = 1000; // после форс-очистки ждем 1s перед новым connect
+const FORCED_RECONNECT_DELAY = 1000; // базовая задержка перед новым connect
+const MAX_RECONNECT_DELAY = 30000; // 30 секунд максимум
 
 let ws = null;
 let isConnecting = false;
@@ -28,6 +29,9 @@ let stopReconnect = false;
 let heartbeatIntervalId = null;
 let pongTimeoutId = null;
 let lastPongTime = 0;
+let reconnectAttempts = 0;
+let lastKnownIP = '';
+let ipCheckIntervalId = null;
 
 // helper для логирования состояния readyState
 function readyStateName(r) {
@@ -88,13 +92,21 @@ function forceCleanupSocket(reason = '') {
   
   isConnecting = false;
   
-  // Переподключаемся немедленно при потере связи
+  // Переподключаемся с экспоненциальной задержкой
   if (!stopReconnect) {
-    console.log("Планируем переподключение через", FORCED_RECONNECT_DELAY, "мс");
+    // Экспоненциальная задержка с ограничением максимума
+    const delay = Math.min(
+      FORCED_RECONNECT_DELAY * Math.pow(1.5, reconnectAttempts),
+      MAX_RECONNECT_DELAY
+    );
+    
+    reconnectAttempts++;
+    
+    console.log(`Планируем переподключение через ${delay}мс (попытка ${reconnectAttempts})`);
     setTimeout(() => {
       console.log("Запускаем переподключение из forceCleanupSocket");
       connectWebSocket();
-    }, FORCED_RECONNECT_DELAY);
+    }, delay);
   }
 }
 
@@ -167,6 +179,23 @@ function stopHeartbeat() {
   }
 }
 
+// Проверка изменения IP-адреса
+async function checkIPChange() {
+  try {
+    const currentIP = await getCurrentIP();
+    if (!currentIP) return;
+    
+    if (lastKnownIP && lastKnownIP !== currentIP) {
+      console.log(`IP изменился: ${lastKnownIP} → ${currentIP}. Переподключаемся.`);
+      forceCleanupSocket('IP changed');
+    }
+    
+    lastKnownIP = currentIP;
+  } catch (err) {
+    console.error("Ошибка при проверке IP:", err);
+  }
+}
+
 // === основная функция подключения с heartbeat ===
 async function connectWebSocket() {
   if (isConnecting) {
@@ -211,8 +240,11 @@ async function connectWebSocket() {
     const username = settings.authusername || "admin";
     const password = settings.authpassword || "admin123";
     const ip = await getCurrentIP();
+    
+    // Сохраняем текущий IP для последующих проверок
+    lastKnownIP = ip;
 
-    console.log("Пробуем подключиться к:", wsUrl);
+    console.log("Пробуем подключиться к:", wsUrl, "IP:", ip);
     
     // Закрываем старый ws если он существует
     if (ws) {
@@ -240,6 +272,7 @@ async function connectWebSocket() {
     ws.onopen = () => {
       console.log("WS onopen — соединение установлено");
       lastPongTime = Date.now(); // Сбрасываем время pong
+      reconnectAttempts = 0; // Сбрасываем счетчик попыток переподключения
       
       const payload = JSON.stringify({
         type: "auth",
@@ -353,13 +386,39 @@ setInterval(() => {
 }, RECONNECT_INTERVAL);
 
 // ========================
+// Мониторинг изменения IP
+// ========================
+// Запускаем проверку IP каждые 30 секунд
+ipCheckIntervalId = setInterval(() => {
+  checkIPChange();
+}, 30000);
+
+// ========================
 // Реакция на события расширения
 // ========================
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "save_settings") {
     console.log("Сохранение настроек — переподключаемся");
     stopReconnect = false;
     forceCleanupSocket('settings changed');
+  }
+  
+  // Обработчик для получения статуса соединения
+  if (message.action === "get_connection_status") {
+    const status = {
+      wsState: ws ? readyStateName(ws.readyState) : 'DISCONNECTED',
+      isConnecting: isConnecting,
+      lastPongTime: lastPongTime ? new Date(lastPongTime).toLocaleTimeString() : 'никогда',
+      lastPongTimestamp: lastPongTime || 0,
+      currentIP: lastKnownIP,
+      reconnectAttempts: reconnectAttempts,
+      stopReconnect: stopReconnect,
+      url: ws ? ws.url : 'не подключен'
+    };
+    
+    // Отправляем ответ асинхронно
+    sendResponse(status);
+    return true; // Указываем, что ответ будет асинхронным
   }
 });
 
@@ -417,3 +476,17 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 // Начальное подключение
 console.log("Инициализация расширения...");
 connectWebSocket();
+
+// Очистка при выгрузке расширения
+chrome.runtime.onSuspend.addListener(() => {
+  console.log("Расширение выгружается...");
+  stopHeartbeat();
+  if (ipCheckIntervalId) {
+    clearInterval(ipCheckIntervalId);
+  }
+  if (ws) {
+    try {
+      ws.close(1000, "extension unloading");
+    } catch (e) {}
+  }
+});
