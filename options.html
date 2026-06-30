@@ -27,23 +27,33 @@
                     <wl-switch checked id="authswitch"></wl-switch>
                 </div>
                 <div class="container20"></div>
-                <wl-textfield id="authserver" label="Auth Server URL (e.g., ws://127.0.0.1:5000)"></wl-textfield>
+                <wl-textfield id="authserver" label="Auth Server URL (e.g., ws://127.0.0.1:8765)"></wl-textfield>
                 <div class="container20"></div>
-                <wl-textfield id="authusername" label="Username"></wl-textfield>
-                <div class="container20"></div>
-                <wl-textfield id="authpassword" label="Password" type="password"></wl-textfield>
+                <div class="native-field">
+                    <span class="native-field-label">Access Token</span>
+                    <div class="native-field-input-wrap">
+                        <input id="authtoken" class="native-field-input" type="password" autocomplete="off" spellcheck="false">
+                        <button type="button" id="toggleTokenBtn" class="token-toggle" aria-label="Show token" title="Show token">
+                            <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <svg class="icon-eye-off" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+                                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+                                <path d="M1 1l22 22"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
                         <div class="status-container">
           <h3>Статус соединения</h3>
           <p><strong>Состояние:</strong> <span id="connection-status">загрузка...</span></p>
-          <p><strong>Последний pong:</strong> <span id="last-pong-time">загрузка...</span></p>
           <p><strong>Текущий IP:</strong> <span id="current-ip">загрузка...</span></p>
-          <p><strong>Попыток переподключения:</strong> <span id="reconnect-attempts">0</span></p>
-          <wl-button id="refreshBtn">Обновить</wl-button>
         </div>
         <style>
-        .status-connected { color: green; font-weight: bold; }
-        .status-disconnected { color: red; font-weight: bold; }
-        .status-connecting { color: orange; font-weight: bold; }
+        .status-connect { color: #1a7f37; font-weight: bold; }
+        .status-disconnect { color: #cf222e; font-weight: bold; }
         </style>
             </wl-card>
         </div>
