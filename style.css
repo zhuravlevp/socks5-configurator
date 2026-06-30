@@ -44,6 +44,76 @@ wl-switch{
     flex-direction:row;
     justify-content:space-between;
 }
+.native-field {
+    display: block;
+    width: 100%;
+}
+.native-field-label {
+    display: block;
+    font-size: 12px;
+    line-height: 1.2;
+    color: #919191;
+    margin-bottom: 10px;
+}
+.native-field-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+    min-height: 32px;
+}
+.native-field-input {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-size: 16px;
+    line-height: 1.4;
+    padding: 2px 36px 6px 0;
+    background: transparent;
+    font-family: inherit;
+    color: inherit;
+}
+.native-field-input-wrap .token-toggle {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.native-field-input-wrap .token-toggle:hover {
+    color: #111827;
+    background: rgba(0, 0, 0, 0.05);
+}
+.native-field-input-wrap .token-toggle .icon-eye-off {
+    display: none;
+}
+.native-field-input-wrap .token-toggle.is-visible .icon-eye {
+    display: none;
+}
+.native-field-input-wrap .token-toggle.is-visible .icon-eye-off {
+    display: block;
+}
+.native-field-input-wrap .token-toggle svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+    display: block;
+}
 .center {
     display:flex;
     flex-direction:row;

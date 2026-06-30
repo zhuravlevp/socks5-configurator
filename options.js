@@ -31,7 +31,7 @@ chrome.storage.local.get('bypassswitch', s =>{
     }
 });
 chrome.storage.local.get('bypassdomain', s =>{
-    s = s.bypassdomain || "ru\nnet\nipinfo.io\nwww.google.com\n0.0.0.0/0";
+    s = s.bypassdomain || "ru\nnet\napi.ipify.org\nifconfig.me\nicanhazip.com\nipinfo.io\nwww.google.com\n0.0.0.0/0";
     document.querySelector('#bypassdomain').value = s;
 });
 
@@ -46,17 +46,31 @@ chrome.storage.local.get('authswitch', s => {
     }
 });
 chrome.storage.local.get('authserver', s => {
-    s = s.authserver || 'ws://localhost:5000';
+    s = s.authserver || 'ws://127.0.0.1:8765';
     document.querySelector('#authserver').value = s;
 });
-chrome.storage.local.get('authusername', s => {
-    s = s.authusername || 'admin';
-    document.querySelector('#authusername').value = s;
+function setTokenVisible(visible) {
+    const input = document.querySelector('#authtoken');
+    const toggleTokenBtn = document.querySelector('#toggleTokenBtn');
+    if (!input || !toggleTokenBtn) return;
+
+    input.type = visible ? 'text' : 'password';
+    toggleTokenBtn.classList.toggle('is-visible', visible);
+    toggleTokenBtn.setAttribute('aria-label', visible ? 'Hide token' : 'Show token');
+    toggleTokenBtn.title = visible ? 'Hide token' : 'Show token';
+}
+
+chrome.storage.local.get('authtoken', s => {
+    document.querySelector('#authtoken').value = s.authtoken || '';
 });
-chrome.storage.local.get('authpassword', s => {
-    s = s.authpassword || 'admin123';
-    document.querySelector('#authpassword').value = s;
-});
+
+const toggleTokenBtn = document.querySelector('#toggleTokenBtn');
+if (toggleTokenBtn) {
+    toggleTokenBtn.addEventListener('click', () => {
+        const input = document.querySelector('#authtoken');
+        setTokenVisible(input.type === 'password');
+    });
+}
 
 document.querySelector('#save').addEventListener("click", async (e) => {
     document.querySelector('#save').style.display = 'none';
@@ -68,8 +82,7 @@ document.querySelector('#save').addEventListener("click", async (e) => {
     var bypassdomain = document.querySelector('#bypassdomain').value;
     var authswitch = document.querySelector('#authswitch').checked;
     var authserver = document.querySelector('#authserver').value;
-    var authusername = document.querySelector('#authusername').value;
-    var authpassword = document.querySelector('#authpassword').value;
+    var authtoken = document.querySelector('#authtoken').value.trim();
 
     if(socks5switch){
         if(!/.+:\d+/.test(socks5server)){
@@ -83,8 +96,7 @@ document.querySelector('#save').addEventListener("click", async (e) => {
     chrome.storage.local.set({"socks5server": socks5server});
     chrome.storage.local.set({"authswitch": authswitch ? 'on' : 'off'});
     chrome.storage.local.set({"authserver": authserver});
-    chrome.storage.local.set({"authusername": authusername});
-    chrome.storage.local.set({"authpassword": authpassword});
+    chrome.storage.local.set({"authtoken": authtoken});
     var l = [
 		"10.0.0.0/8",
 		"127.0.0.0/8",
