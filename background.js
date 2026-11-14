@@ -61,6 +61,215 @@ async function getCurrentIP() {
 }
 
 // ========================
+// Bypass / proxy settings
+// ========================
+const PRIVATE_BYPASS = [
+  "10.0.0.0/8",
+  "127.0.0.0/8",
+  "169.254.0.0/16",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "224.0.0.0/4",
+  "::/127",
+  "<local>",
+  "<localhost>",
+  "*.local",
+];
+
+const JSON_FETCH_TIMEOUT_MS = 30000;
+
+function isIpOrCidr(value) {
+  return /^(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?$/.test(value)
+    || /^[0-9a-fA-F:]+(?:\/\d{1,3})?$/.test(value);
+}
+
+function expandBypassEntry(value) {
+  const v = String(value || "").trim();
+  if (!v) return [];
+  if (v.startsWith("<") || isIpOrCidr(v)) return [v];
+  return [v, `*.${v}`];
+}
+
+function parseAmneziaJson(data) {
+  if (!Array.isArray(data)) return [];
+
+  const entries = [];
+  const seen = new Set();
+
+  const push = (value) => {
+    const v = String(value || "").trim();
+    if (!v || seen.has(v)) return;
+    seen.add(v);
+    entries.push(v);
+  };
+
+  for (const item of data) {
+    if (!item || typeof item !== "object") continue;
+    push(item.hostname);
+    push(item.ip);
+    if (Array.isArray(item.ips)) {
+      for (const ip of item.ips) push(ip);
+    }
+  }
+
+  return entries;
+}
+
+async function fetchRemoteBypassJson(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), JSON_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return parseAmneziaJson(data);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadRemoteBypassList(url) {
+  if (!url) {
+    await chrome.storage.local.set({
+      bypassjsoncache: [],
+      bypassjsonmeta: { count: 0, updatedAt: "", error: "" },
+    });
+    return { entries: [], error: "", count: 0 };
+  }
+
+  try {
+    const entries = await fetchRemoteBypassJson(url);
+    const meta = {
+      count: entries.length,
+      updatedAt: new Date().toISOString(),
+      error: "",
+      url,
+    };
+    await chrome.storage.local.set({
+      bypassjsoncache: entries,
+      bypassjsonmeta: meta,
+    });
+    console.log(`Bypass JSON загружен: ${entries.length} записей из`, url);
+    return { entries, error: "", count: entries.length };
+  } catch (err) {
+    const error = String(err && err.message ? err.message : err);
+    console.warn("Не удалось загрузить bypass JSON:", error);
+    const stored = await chrome.storage.local.get(["bypassjsoncache", "bypassjsonmeta"]);
+    const cached = Array.isArray(stored.bypassjsoncache) ? stored.bypassjsoncache : [];
+    await chrome.storage.local.set({
+      bypassjsonmeta: {
+        ...(stored.bypassjsonmeta || {}),
+        error,
+        url,
+      },
+    });
+    return { entries: cached, error, count: cached.length };
+  }
+}
+
+function buildBypassList(manualText, remoteEntries, bypassEnabled) {
+  const list = [...PRIVATE_BYPASS];
+  const seen = new Set(list);
+
+  const add = (value) => {
+    for (const item of expandBypassEntry(value)) {
+      if (seen.has(item)) continue;
+      seen.add(item);
+      list.push(item);
+    }
+  };
+
+  if (bypassEnabled) {
+    String(manualText || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .forEach(add);
+
+    (remoteEntries || []).forEach(add);
+  }
+
+  return list;
+}
+
+function setProxyConfig(config) {
+  return new Promise((resolve, reject) => {
+    chrome.proxy.settings.set({ value: config, scope: "regular" }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+let applyProxyPromise = null;
+
+async function applyProxySettings() {
+  if (applyProxyPromise) return applyProxyPromise;
+
+  applyProxyPromise = (async () => {
+    const settings = await chrome.storage.local.get([
+      "socks5switch",
+      "socks5server",
+      "bypassswitch",
+      "bypassdomain",
+      "bypassjsonurl",
+    ]);
+
+    const socksOn = (settings.socks5switch || "on") === "on";
+    if (!socksOn) {
+      await setProxyConfig({ mode: "system" });
+      return { ok: true, jsonCount: 0, jsonError: "" };
+    }
+
+    const socks5server = settings.socks5server || "";
+    if (!/.+:\d+/.test(socks5server)) {
+      throw new Error("Invalid socks5 proxy address");
+    }
+
+    const bypassOn = (settings.bypassswitch || "on") === "on";
+    const jsonUrl = (settings.bypassjsonurl || "").trim();
+    const remote = await loadRemoteBypassList(jsonUrl);
+    const bypassList = buildBypassList(
+      settings.bypassdomain || "",
+      remote.entries,
+      bypassOn,
+    );
+
+    const host = socks5server.substring(0, socks5server.lastIndexOf(":")).replace("[", "").replace("]", "");
+    const port = parseInt(socks5server.substring(socks5server.lastIndexOf(":") + 1), 10);
+
+    await setProxyConfig({
+      mode: "fixed_servers",
+      rules: {
+        singleProxy: {
+          scheme: "socks5",
+          host,
+          port,
+        },
+        bypassList,
+      },
+    });
+
+    console.log(`Proxy applied: ${host}:${port}, bypass entries: ${bypassList.length}`);
+    return {
+      ok: true,
+      jsonCount: remote.count,
+      jsonError: remote.error,
+      bypassCount: bypassList.length,
+    };
+  })();
+
+  try {
+    return await applyProxyPromise;
+  } finally {
+    applyProxyPromise = null;
+  }
+}
+
+// ========================
 // Connection parameters
 // ========================
 const PING_INTERVAL = 5000;
@@ -429,6 +638,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     forceCleanupSocket("settings changed");
   }
 
+  if (message.action === "apply_proxy") {
+    applyProxySettings()
+      .then((result) => sendResponse(result))
+      .catch((err) => {
+        console.error("apply_proxy failed:", err);
+        sendResponse({ ok: false, jsonError: String(err && err.message ? err.message : err) });
+      });
+    return true;
+  }
+
   if (message.action === "get_connection_status") {
     sendResponse({
       wsState: ws ? readyStateName(ws.readyState) : "DISCONNECTED",
@@ -448,11 +667,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 chrome.runtime.onStartup.addListener(() => {
   stopReconnect = false;
   connectWebSocket();
+  applyProxySettings().catch((err) => console.error("startup proxy apply failed:", err));
 });
 
 chrome.runtime.onInstalled.addListener(() => {
   stopReconnect = false;
   connectWebSocket();
+  applyProxySettings().catch((err) => console.error("install proxy apply failed:", err));
 });
 
 if (self.addEventListener) {
@@ -485,10 +706,21 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     stopReconnect = false;
     forceCleanupSocket("settings updated");
   }
+
+  if (
+    changes.socks5switch ||
+    changes.socks5server ||
+    changes.bypassswitch ||
+    changes.bypassdomain ||
+    changes.bypassjsonurl
+  ) {
+    applyProxySettings().catch((err) => console.error("storage proxy apply failed:", err));
+  }
 });
 
 console.log("Инициализация расширения...");
 connectWebSocket();
+applyProxySettings().catch((err) => console.error("init proxy apply failed:", err));
 
 chrome.runtime.onSuspend.addListener(() => {
   stopHeartbeat();

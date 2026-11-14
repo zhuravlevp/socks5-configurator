@@ -31,8 +31,18 @@ chrome.storage.local.get('bypassswitch', s =>{
     }
 });
 chrome.storage.local.get('bypassdomain', s =>{
-    s = s.bypassdomain || "ru\nnet\napi.ipify.org\nifconfig.me\nicanhazip.com\nipinfo.io\nwww.google.com\n0.0.0.0/0";
+    s = s.bypassdomain || "ru\nnet\napi.ipify.org\nifconfig.me\nicanhazip.com\nipinfo.io\nwww.google.com";
     document.querySelector('#bypassdomain').value = s;
+});
+chrome.storage.local.get(['bypassjsonurl', 'bypassjsonmeta'], s => {
+    document.querySelector('#bypassjsonurl').value = s.bypassjsonurl || '';
+    const status = document.querySelector('#bypassjsonstatus');
+    if (status && s.bypassjsonmeta) {
+        const meta = s.bypassjsonmeta;
+        status.textContent = meta.error
+            ? `JSON: error — ${meta.error}`
+            : `JSON: ${meta.count || 0} entries, updated ${meta.updatedAt || 'never'}`;
+    }
 });
 
 // Загрузка настроек авторизации
@@ -80,6 +90,7 @@ document.querySelector('#save').addEventListener("click", async (e) => {
     var socks5server = document.querySelector('#socks5server').value;
     var bypassswitch = document.querySelector('#bypassswitch').checked;
     var bypassdomain = document.querySelector('#bypassdomain').value;
+    var bypassjsonurl = document.querySelector('#bypassjsonurl').value.trim();
     var authswitch = document.querySelector('#authswitch').checked;
     var authserver = document.querySelector('#authserver').value;
     var authtoken = document.querySelector('#authtoken').value.trim();
@@ -92,65 +103,32 @@ document.querySelector('#save').addEventListener("click", async (e) => {
             return;
         }
     }
-    chrome.storage.local.set({"socks5switch": socks5switch ? 'on' : 'off'});
-    chrome.storage.local.set({"socks5server": socks5server});
-    chrome.storage.local.set({"authswitch": authswitch ? 'on' : 'off'});
-    chrome.storage.local.set({"authserver": authserver});
-    chrome.storage.local.set({"authtoken": authtoken});
-    var l = [
-		"10.0.0.0/8",
-		"127.0.0.0/8",
-		"169.254.0.0/16",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"224.0.0.0/4",
-		"::/127",
-        "<local>",
-        "<localhost>",
-        "*.local",
-	];
-    if(bypassswitch){
-        var l1 = bypassdomain.trim().split('\n');
-        l1.forEach(v=>{
-            l.push(v.trim());
-            l.push("*."+v.trim());
-        });
-    }
-    chrome.storage.local.set({"bypassswitch": bypassswitch ? 'on' : 'off'});
-    chrome.storage.local.set({"bypassdomain": bypassdomain});
 
-    if(!socks5switch){
-        chrome.proxy.settings.set({
-            value: {
-                mode: "system",
-            },
-        },()=>{
-            setTimeout(()=>{
-                document.querySelector('#save').style.display = 'block';
-                document.querySelector('#ing').style.display = 'none';
-            }, 2000);
-        });
-        return;
-    }
+    await chrome.storage.local.set({
+        socks5switch: socks5switch ? 'on' : 'off',
+        socks5server: socks5server,
+        authswitch: authswitch ? 'on' : 'off',
+        authserver: authserver,
+        authtoken: authtoken,
+        bypassswitch: bypassswitch ? 'on' : 'off',
+        bypassdomain: bypassdomain,
+        bypassjsonurl: bypassjsonurl,
+    });
 
-    var host = socks5server.substring(0, socks5server.lastIndexOf(':')).replace('[', '').replace(']', '');
-    var port = socks5server.substring(socks5server.lastIndexOf(':')+1);
-    chrome.proxy.settings.set({
-        value: {
-            mode: "fixed_servers",
-            rules: {
-                singleProxy: {
-                    scheme: "socks5",
-                    host: host,
-                    port: parseInt(port),
-                },
-                bypassList: l,
-            },
-        },
-    },()=>{
+    chrome.runtime.sendMessage({ action: "apply_proxy" }, (response) => {
+        const status = document.querySelector('#bypassjsonstatus');
+        if (status && response) {
+            if (response.jsonError) {
+                status.textContent = `JSON: error — ${response.jsonError}`;
+            } else if (response.jsonCount != null) {
+                status.textContent = `JSON: ${response.jsonCount} entries applied`;
+            } else if (!bypassjsonurl) {
+                status.textContent = '';
+            }
+        }
         setTimeout(()=>{
             document.querySelector('#save').style.display = 'block';
             document.querySelector('#ing').style.display = 'none';
-        }, 1000);
+        }, 800);
     });
 });
